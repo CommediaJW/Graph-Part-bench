@@ -19,13 +19,15 @@ if __name__ == '__main__':
         default="ogbn-papers100M",
         choices=["ogbn-products", "ogbn-papers100M", "ogbn-papers400M"])
     parser.add_argument("--save-path", default=None, type=str)
-    parser.add_argument("--heat", default=None, type=str)
+    parser.add_argument("--feat-heat", default=None, type=str)
+    parser.add_argument("--adj-heat", default=None, type=str)
     args = parser.parse_args()
     print(args)
 
-    assert args.heat != None
-    heat = torch.load(args.heat)
-    nids = torch.nonzero(heat).flatten()
+    assert args.feat_heat != None and args.adj_heat != None
+    feat_heat = torch.load(args.feat_heat)
+    adj_heat = torch.load(args.adj_heat)
+    nids = torch.nonzero(feat_heat).flatten()
 
     start = time.time()
     graph, _ = DistGNN.dataloading.load_dataset(args.root,
@@ -35,7 +37,7 @@ if __name__ == '__main__':
     end = time.time()
     print("Loading graph takes {:.3f} s".format(end - start))
 
-    train_mask = torch.zeros((heat.numel(), ), dtype=torch.bool)
+    train_mask = torch.zeros((feat_heat.numel(), ), dtype=torch.bool)
     train_mask[graph["train_idx"]] = True
 
     dgl_graph = dgl.graph(
@@ -44,12 +46,14 @@ if __name__ == '__main__':
     dgl_graph.ndata["train_mask"] = train_mask
     if args.bias:
         dgl_graph.edata["probs"] = graph["probs"]
+    dgl_graph.ndata["feat_heat"] = feat_heat
+    dgl_graph.ndata["adj_heat"] = adj_heat
 
     indptr, indices, eid = dgl_graph.adj_tensors('csc')
 
     del graph
 
-    assert dgl_graph.num_nodes() == heat.numel()
+    assert dgl_graph.num_nodes() == feat_heat.numel()
 
     start = time.time()
     processed_graph = dgl.node_subgraph(dgl_graph,
@@ -81,6 +85,10 @@ if __name__ == '__main__':
     torch.save(indptr, os.path.join(args.save_path, "indptr.pt"))
     torch.save(indices, os.path.join(args.save_path, "indices.pt"))
     torch.save(labels, os.path.join(args.save_path, "labels.pt"))
+    torch.save(processed_graph.ndata["feat_heat"],
+               os.path.join(args.save_path, "feat_heat.pt"))
+    torch.save(processed_graph.ndata["adj_heat"],
+               os.path.join(args.save_path, "adj_heat.pt"))
     if args.bias:
         torch.save(probs, os.path.join(args.save_path, "probs.pt"))
     end = time.time()

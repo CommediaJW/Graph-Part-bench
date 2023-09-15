@@ -15,14 +15,7 @@ if __name__ == '__main__':
     parser.add_argument("--save-path", type=str, default=".")
     args = parser.parse_args()
 
-    if args.dataset == "ogbn-products":
-        graph, num_classes = load_dataset(args.root,
-                                          "ogbn-products",
-                                          with_feature=False)
-    elif args.dataset == "ogbn-papers100M":
-        graph, num_classes = load_dataset(args.root,
-                                          "ogbn-papers100M",
-                                          with_feature=False)
+    graph, _ = load_dataset(args.root, args.dataset, with_feature=False)
 
     indptr = graph["indptr"]
     indices = graph["indices"]

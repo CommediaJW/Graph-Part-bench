@@ -37,8 +37,8 @@ if __name__ == '__main__':
         part_id = int(line)
         parts_mask_list[part_id][nid] = True
     end = time.time()
-    print("Reading xtrapulp parts and generating part masks takes {:.3f} s".
-          format(end - start))
+    print("Reading parts file and generating part masks takes {:.3f} s".format(
+        end - start))
 
     train_nids_list = []
     for i, part_mask in enumerate(parts_mask_list):
@@ -53,11 +53,9 @@ if __name__ == '__main__':
     else:
         save_path = args.root
     mask_save_fn = os.path.join(
-        save_path,
-        args.dataset + "_xtrapulp_" + str(args.num_parts) + "parts_mask.pkl")
+        save_path, args.dataset + str(args.num_parts) + "parts_mask.pkl")
     train_save_fn = os.path.join(
-        save_path, args.dataset + "_xtrapulp_" + str(args.num_parts) +
-        "parts_train_nids.pkl")
+        save_path, args.dataset + str(args.num_parts) + "parts_train_nids.pkl")
     torch.save(parts_mask_list, mask_save_fn)
     torch.save(train_nids_list, train_save_fn)
     print("Result saved to {} and {}".format(mask_save_fn, train_save_fn))

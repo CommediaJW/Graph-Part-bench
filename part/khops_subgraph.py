@@ -18,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument("--save-path", default=None, type=str)
     parser.add_argument("--train-nids", default=None, type=str)
     parser.add_argument("--hops", default=3, type=int)
-    parser.add_argument("--bench", default=False, action="store_true")
+    parser.add_argument("--eval", default=False, action="store_true")
     parser.add_argument("--parts", default=None, type=str)
     args = parser.parse_args()
     print(args)
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     del graph
     dgl_g = dgl.graph(("csc", (indptr, indices, torch.tensor([]))))
 
-    if args.bench:
+    if args.eval:
         assert args.parts != None
         parts_mask_list = torch.load(args.parts)
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     train_nids_list = torch.load(args.train_nids)
     subgraph_mask_list = []
     for rank, train_nids in enumerate(train_nids_list):
-        if args.bench:
+        if args.eval:
             parts_nids = parts_mask_list[rank].nonzero().flatten()
             subg = dgl.node_subgraph(dgl_g,
                                      parts_nids,
@@ -70,13 +70,13 @@ if __name__ == '__main__':
             total_nids_list.append(neighbors)
             total_nids = torch.cat(total_nids_list).unique()
 
-            if args.bench:
+            if args.eval:
                 subg = dgl.node_subgraph(dgl_g,
                                          total_nids,
                                          relabel_nodes=False,
                                          store_ids=False)
                 print("{:4d} hops subgraph, #nodes = {:12d}, #edges = {:12d}".
-                      format(i, total_nids.numel(), subg.num_edges()))
+                      format(i + 1, total_nids.numel(), subg.num_edges()))
                 intersect_nids = torch.from_numpy(
                     np.intersect1d(total_nids.numpy(), parts_nids.numpy()))
                 subg = dgl.node_subgraph(dgl_g,
