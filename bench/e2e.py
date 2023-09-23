@@ -50,6 +50,7 @@ def run(data, args):
     parts_sampling_time_log = []
     parts_loading_time_log = []
     parts_training_time_log = []
+    parts_epoch_time_log = []
 
     for i, train_nids in enumerate(train_nids_list):
         print("Part {:3d}, training nids num = {:10d}".format(
@@ -133,6 +134,7 @@ def run(data, args):
         sampling_time_log = []
         loading_time_log = []
         training_time_log = []
+        epoch_start = time.time()
         model.train()
         for it, seed_nids in enumerate(train_dataloader):
             torch.cuda.synchronize()
@@ -165,20 +167,24 @@ def run(data, args):
             training_time_log.append(training_end - training_start)
             iteration_time_log.append(training_end - sampling_start)
 
+        epoch_end = time.time()
+
         sampling_time, loading_time, training_time, iteration_time = np.mean(
             sampling_time_log[3:]) * 1000, np.mean(
                 loading_time_log[3:]) * 1000, np.mean(
                     training_time_log[3:]) * 1000, np.mean(
                         iteration_time_log[3:]) * 1000
+        epoch_time = (epoch_end - epoch_start) * 1000
         parts_sampling_time_log.append(sampling_time)
         parts_loading_time_log.append(loading_time)
         parts_training_time_log.append(training_time)
         parts_iteration_time_log.append(iteration_time)
+        parts_epoch_time_log.append(epoch_time)
 
         print(
-            "Part {:3d} | Sampling {:8.3f} ms | Loading {:8.3f} ms | Training {:8.3f} ms | Iteration {:8.3f} ms"
+            "Part {:3d} | Sampling {:8.3f} ms | Loading {:8.3f} ms | Training {:8.3f} ms | Iteration {:8.3f} ms | Epoch {:8.3f} ms"
             .format(i, sampling_time, loading_time, training_time,
-                    iteration_time))
+                    iteration_time, epoch_time))
 
         for key in graph:
             DistGNN.capi.ops._CAPI_tensor_unpin_memory(graph[key])
@@ -207,6 +213,11 @@ def run(data, args):
                 np.max(parts_iteration_time_log),
                 np.average(parts_iteration_time_log),
                 np.std(parts_iteration_time_log)))
+    print(
+        "Epoch: min {:8.3f} ms, max {:8.3f} ms, avg {:8.3f} ms, std {:8.3f} ms"
+        .format(np.min(parts_epoch_time_log), np.max(parts_epoch_time_log),
+                np.average(parts_epoch_time_log),
+                np.std(parts_epoch_time_log)))
 
 
 if __name__ == '__main__':
@@ -228,10 +239,8 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help="Sample with bias.")
-    parser.add_argument('--cache-budget',
-                        type=float,
-                        default=1,
-                        help="Unit: GB")
+    parser.add_argument('--cache-budget', type=float, default=1)
+    parser.add_argument('--num-parts', type=int, default=4, help="Unit: GB")
     args = parser.parse_args()
     print(args)
 
@@ -243,7 +252,20 @@ if __name__ == '__main__':
                                                           with_probs=args.bias)
     end = time.time()
     print("Loading graph takes {:.3f} s".format(end - start))
-    train_nids_list = torch.load(args.train_nids)
+    if args.train_nids != "random":
+        train_nids_list = torch.load(args.train_nids)
+    else:
+        train_nids_list = []
+        train_nids = graph.pop("train_idx")
+        train_nids = train_nids[torch.randperm(train_nids.shape[0])]
+        num_train_nids_per_part = (train_nids.shape[0] + args.num_parts -
+                                   1) // args.num_parts
+        for device in range(args.num_parts):
+            local_train_nids = train_nids[device *
+                                          num_train_nids_per_part:(device +
+                                                                   1) *
+                                          num_train_nids_per_part]
+            train_nids_list.append(local_train_nids)
 
     graph["labels"] = graph["labels"].long()
     data = graph, num_classes, train_nids_list
