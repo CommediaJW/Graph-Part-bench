@@ -25,7 +25,6 @@ if __name__ == '__main__':
     train_mask = torch.zeros((num_nodes, ), dtype=torch.bool)
     train_mask[graph["train_idx"]] = True
     lines = [[] for _ in range(num_nodes)]
-    accessed = set([])  # to remove duplicate edges
     num_edges = 0
     start = time.time()
     for nid in range(num_nodes):
@@ -37,18 +36,13 @@ if __name__ == '__main__':
             lines[nid].insert(0, "1")
         for i in range(indptr[nid].item(), indptr[nid + 1].item()):
             neighbor = indices[i].item()
-            if ((nid, neighbor) not in accessed) and ((neighbor, nid)
-                                                      not in accessed):
-                # metis requires undirected graph
-                lines[nid].append(str(neighbor + 1))
-                lines[neighbor].append(str(nid + 1))
-                accessed.add((nid, neighbor))
-                accessed.add((neighbor, nid))
-                num_edges += 1
+            lines[nid].append(str(neighbor + 1))
+            num_edges += 1
         if (nid + 1) % 200000 == 0:
             print("[Generate lines] processed {} nodes.".format(nid + 1))
 
-    filename = os.path.join(args.save_path, args.dataset + "_metis.graph")
+    filename = os.path.join(args.save_path,
+                            args.dataset + "_xtrapulp_node_weighted.graph")
     f = open(filename, "w")
     hearder = "{} {} 010 2\n".format(num_nodes, num_edges)
     f.write(hearder)

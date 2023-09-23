@@ -89,7 +89,7 @@ if __name__ == '__main__':
         line = " ".join(line) + "\n"
         f.write(line)
         if (it + 1) % 200000 == 0:
-            print("[Write] processed {} nodes.".format(nid + 1))
+            print("[Write] processed {} nodes.".format(it + 1))
 
     end = time.time()
     print("Generate metis graph takes {:.3f} s".format(end - start))
