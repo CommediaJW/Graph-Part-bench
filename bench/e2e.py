@@ -134,47 +134,50 @@ def run(data, args):
         sampling_time_log = []
         loading_time_log = []
         training_time_log = []
-        epoch_start = time.time()
-        model.train()
-        for it, seed_nids in enumerate(train_dataloader):
-            torch.cuda.synchronize()
-            sampling_start = time.time()
-            batch = sampler._CAPI_sample_node_classifiction(
-                seed_nids, fan_out, False)
-            blocks = build_blocks(batch)
-            torch.cuda.synchronize()
-            sampling_end = time.time()
+        epoch_time_log = []
+        for _ in range(4):
+            model.train()
+            epoch_start = time.time()
+            for it, seed_nids in enumerate(train_dataloader):
+                torch.cuda.synchronize()
+                sampling_start = time.time()
+                batch = sampler._CAPI_sample_node_classifiction(
+                    seed_nids, fan_out, False)
+                blocks = build_blocks(batch)
+                torch.cuda.synchronize()
+                sampling_end = time.time()
 
-            loading_start = time.time()
-            batch_inputs = feature_server._CAPI_get_feature(
-                blocks[0].srcdata[dgl.NID])
-            batch_labels = DistGNN.capi.ops._CAPI_cuda_index_select(
-                graph["labels"], seed_nids)
-            torch.cuda.synchronize()
-            loading_end = time.time()
+                loading_start = time.time()
+                batch_inputs = feature_server._CAPI_get_feature(
+                    blocks[0].srcdata[dgl.NID])
+                batch_labels = DistGNN.capi.ops._CAPI_cuda_index_select(
+                    graph["labels"], seed_nids)
+                torch.cuda.synchronize()
+                loading_end = time.time()
 
-            training_start = time.time()
-            batch_pred = model(blocks, batch_inputs)
-            loss = F.cross_entropy(batch_pred, batch_labels)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            torch.cuda.synchronize()
-            training_end = time.time()
+                training_start = time.time()
+                batch_pred = model(blocks, batch_inputs)
+                loss = F.cross_entropy(batch_pred, batch_labels)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                torch.cuda.synchronize()
+                training_end = time.time()
 
-            sampling_time_log.append(sampling_end - sampling_start)
-            loading_time_log.append(loading_end - loading_start)
-            training_time_log.append(training_end - training_start)
-            iteration_time_log.append(training_end - sampling_start)
+                sampling_time_log.append(sampling_end - sampling_start)
+                loading_time_log.append(loading_end - loading_start)
+                training_time_log.append(training_end - training_start)
+                iteration_time_log.append(training_end - sampling_start)
 
-        epoch_end = time.time()
+            epoch_end = time.time()
+            epoch_time_log.append(epoch_end - epoch_start)
 
-        sampling_time, loading_time, training_time, iteration_time = np.mean(
+        sampling_time, loading_time, training_time, iteration_time, epoch_time = np.mean(
             sampling_time_log[3:]) * 1000, np.mean(
                 loading_time_log[3:]) * 1000, np.mean(
                     training_time_log[3:]) * 1000, np.mean(
-                        iteration_time_log[3:]) * 1000
-        epoch_time = (epoch_end - epoch_start) * 1000
+                        iteration_time_log[3:]) * 1000, np.mean(
+                            epoch_time_log[1:]) * 1000
         parts_sampling_time_log.append(sampling_time)
         parts_loading_time_log.append(loading_time)
         parts_training_time_log.append(training_time)
@@ -267,6 +270,7 @@ if __name__ == '__main__':
                                           num_train_nids_per_part]
             train_nids_list.append(local_train_nids)
 
+    graph["labels"][torch.isnan(graph["labels"])] = 0
     graph["labels"] = graph["labels"].long()
     data = graph, num_classes, train_nids_list
 
